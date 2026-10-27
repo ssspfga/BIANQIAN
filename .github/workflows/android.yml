@@ -23,23 +23,41 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: 准备 Android SDK
-        uses: android-actions/setup-android@v3
+      - name: 检查仓库文件
+        run: |
+          echo "===== 仓库根目录 ====="
+          ls -la
+          echo "===== 环境 ====="
+          node -v
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "===== 必需文件自检 ====="
+          miss=0
+          for f in package.json capacitor.config.json www/index.html; do
+            if [ -f "$f" ]; then echo "OK   $f"; else echo "MISSING   $f"; miss=1; fi
+          done
+          if [ "$miss" = "1" ]; then
+            echo "::error::仓库根目录缺少上面标 MISSING 的文件，请把它们上传到仓库根目录"
+            exit 1
+          fi
 
       - name: 安装依赖
-        run: npm install
+        run: npm install --no-audit --no-fund
 
-      - name: 生成 android 工程
-        run: npx cap add android
-
-      - name: 同步网页资源
-        run: npx cap sync android
+      - name: 生成 / 更新 android 工程
+        run: |
+          if [ -d android ]; then
+            npx cap sync android
+          else
+            npx cap add android
+          fi
 
       - name: 构建 debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
