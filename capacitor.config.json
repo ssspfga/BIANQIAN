@@ -1,0 +1,11 @@
+﻿{
+  "appId": "com.biji.notes",
+  "appName": "便签",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
