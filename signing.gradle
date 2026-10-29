@@ -1,0 +1,14 @@
+android {
+    signingConfigs {
+        biji {
+            storeFile file("biji.keystore")
+            storePassword "BijiKs-2026-Note"
+            keyAlias "biji"
+            keyPassword "BijiKs-2026-Note"
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.biji }
+        release { signingConfig signingConfigs.biji }
+    }
+}
