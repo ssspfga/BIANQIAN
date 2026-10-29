@@ -40,6 +40,7 @@ jobs:
             echo "::error::仓库根目录缺少上面标 MISSING 的文件，请把它们上传到仓库根目录"
             exit 1
           fi
+          if [ -f signing.gradle ]; then echo "OK   signing.gradle"; else echo "缺少 signing.gradle（不影响出包，但签名不固定）"; fi
 
       - name: 安装依赖
         run: npm install --no-audit --no-fund
@@ -56,18 +57,31 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::warning::没有配置 KEYSTORE_BASE64 这个 Secret，本次用默认 debug 签名，装不上旧版（下次配好就能覆盖安装了）"
+          echo "KEYSTORE_BASE64 字符数: ${#KEYSTORE_B64}"
+          if [ ! -f signing.gradle ]; then
+            echo "::warning::仓库根目录没有 signing.gradle，本次跳过固定签名（APK 用默认调试签名，装不上旧版）"
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > android/app/biji.keystore
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::没有配置 KEYSTORE_BASE64 这个 Secret，本次跳过固定签名"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/biji.keystore 2>/dev/null || true
+          if [ ! -s android/app/biji.keystore ]; then
+            echo "::warning::KEYSTORE_BASE64 解码后是空文件，Secret 可能没粘完整，本次跳过固定签名"
+            exit 0
+          fi
+          if ! keytool -list -keystore android/app/biji.keystore -storepass "BijiKs-2026-Note" > /dev/null 2>&1; then
+            echo "::warning::keystore 读取失败（文件损坏或密码不对），本次跳过固定签名"
+            exit 0
+          fi
           cp signing.gradle android/app/signing.gradle
           printf '\napply from: "signing.gradle"\n' >> android/app/build.gradle
           sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/' android/app/build.gradle
           sed -i 's/versionName "1.0"/versionName "1.1.1"/' android/app/build.gradle
-          echo "===== 版本与签名确认 ====="
+          echo "===== 版本信息 ====="
           grep -n 'versionCode\|versionName' android/app/build.gradle || true
-          keytool -list -keystore android/app/biji.keystore -storepass "BijiKs-2026-Note" | head -5
+          echo "固定签名已配置完成"
 
       - name: 构建 debug APK
         run: |
@@ -77,6 +91,7 @@ jobs:
 
       - name: 显示 APK 签名指纹
         run: |
+          echo "期望的 SHA256: 1F:92:95:8C:47:5D:93:C2:D9:DE:99:F5:99:4A:FA:4A:BC:1A:F8:B8:27:4B:B4:7D:1D:CD:9A:8E:93:91:29:7C"
           keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk || true
 
       - name: 上传 APK
