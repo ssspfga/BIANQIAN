@@ -310,6 +310,12 @@
   .sheet-body{flex:1;overflow-y:auto;padding:4px 16px 16px}
   .sheet-foot{flex:none;display:flex;gap:10px;padding:10px 16px 16px;border-top:1px solid var(--line)}
   .sheet-foot.wrap{flex-wrap:wrap}
+  .logbox{
+    margin:0;padding:10px;border-radius:12px;background:#f6f8fc;
+    font-family:ui-monospace,Consolas,"Courier New",monospace;
+    font-size:11px;line-height:1.65;color:#39404e;
+    white-space:pre-wrap;word-break:break-all;
+  }
   .verline{
     flex:none;text-align:center;font-size:11.5px;color:#aeb6c4;
     letter-spacing:.6px;padding:0 16px 13px;
@@ -544,12 +550,20 @@
       <div class="btn-row" id="rowBackupDir" style="margin-top:10px" hidden>
         <button class="btn" id="btnBackupDir">打开电脑上的备份文件夹</button>
       </div>
+
+      <div class="sec-title">诊断日志</div>
+      <div class="sync-state" id="logState">会把操作、触屏事件、同步过程记下来；出问题时上传到网盘或复制给我。</div>
+      <div class="btn-row">
+        <button class="btn" id="btnLogView">查看日志</button>
+        <button class="btn" id="btnLogUpload">上传到网盘</button>
+        <button class="btn danger" id="btnLogClear">清空</button>
+      </div>
     </div>
     <div class="sheet-foot">
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.3.1　设计：陈师傅　编译：DeepSeek</div>
+    <div class="verline" id="verLine">版本 V1.4　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -567,6 +581,26 @@
 
 </div>
 </div>
+
+  <!-- 诊断日志 -->
+  <section class="sheet" id="sheetLog" hidden>
+    <div class="sheet-head">
+      <button class="icon-btn" id="btnCloseLog" aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="title">诊断日志</div>
+      <button class="icon-btn" id="btnCopyLog" title="复制全部">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <pre class="logbox" id="logBox"></pre>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn" id="btnLogUpload2">上传到网盘</button>
+      <button class="btn primary" id="btnCloseLog2">关闭</button>
+    </div>
+  </section>
 
 <div class="pop" id="popTags" hidden>
   <div class="pop-card">
@@ -613,7 +647,7 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.3.1';
+var APP_VERSION='V1.4';
 
 var data={ notes:[], trash:[], gone:{} };
 var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
@@ -665,6 +699,98 @@ function saveCfg(){
   try{ localStorage.setItem(LS_CFG, JSON.stringify(cfg)); }catch(e){}
   try{ localStorage.setItem(LS_SYNC, String(lastSync)); }catch(e){}
 }
+
+/* ================= 日志（本机 + 可上传到网盘） ================= */
+var LOG_KEY='notes.log.v1', LOG_MAX=600;
+var logBuf=[], logDirty=false, logUploadAt=0, logTimer=null;
+
+function pad2(n){ return n<10?('0'+n):(''+n); }
+function nowStr(){
+  var d=new Date();
+  return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds())+'.'+('00'+d.getMilliseconds()).slice(-3);
+}
+function deviceTag(){
+  var N=window.notesNative;
+  if(N && N.platform){ return N.platform==='win32'?'windows':String(N.platform); }
+  if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return 'android';
+  return 'web';
+}
+function log(tag,msg){
+  var line=nowStr()+' ['+tag+'] '+String(msg);
+  logBuf.push(line);
+  if(logBuf.length>LOG_MAX) logBuf=logBuf.slice(-LOG_MAX);
+  logDirty=true;
+  if(!logTimer){
+    logTimer=setTimeout(function(){
+      logTimer=null;
+      try{ localStorage.setItem(LOG_KEY, JSON.stringify(logBuf)); }catch(e){}
+    }, 400);
+  }
+  if(!$('#sheetLog').hidden) refreshLogBox();
+}
+function logRestore(){
+  try{
+    var a=JSON.parse(localStorage.getItem(LOG_KEY)||'null');
+    if(Array.isArray(a)) logBuf=a.slice(-LOG_MAX);
+  }catch(e){}
+}
+function logText(){
+  return '# 便签 App 诊断日志\n'
+    +'# 版本 '+APP_VERSION+'｜设备 '+deviceTag()+'｜生成 '+new Date().toLocaleString()+'\n'
+    +'# UA '+(navigator.userAgent||'')+'\n'
+    +'# 屏幕 '+((window.screen&&screen.width)||0)+'x'+((window.screen&&screen.height)||0)
+    +'｜可视 '+window.innerWidth+'x'+window.innerHeight+'｜像素比 '+(window.devicePixelRatio||1)+'\n\n'
+    + logBuf.join('\n') + '\n';
+}
+function refreshLogBox(){
+  var box=$('#logBox');
+  if(!box) return;
+  box.textContent=logBuf.join('\n');
+  box.scrollTop=box.scrollHeight;
+}
+function openLog(){
+  refreshLogBox();
+  $('#sheetLog').hidden=false;
+}
+async function uploadLog(force){
+  if(!davReady()){ if(force) toast('先配置 WebDAV'); return false; }
+  if(!force && (!logDirty || Date.now()-logUploadAt < 60000)) return false;
+  var name='日志-'+deviceTag()+'.txt';
+  try{
+    var r=await dav('PUT', fileUrl(name), logText(), 'text/plain; charset=utf-8');
+    if(r.status>=200 && r.status<300){
+      logUploadAt=Date.now();
+      log('LOG','已上传 '+name+'（HTTP '+r.status+'）');
+      logDirty=false;
+      if(force) toast('日志已上传：'+name);
+      return true;
+    }
+    log('LOG','上传失败 HTTP '+r.status);
+    if(force) toast('上传失败：'+statusMsg(r.status));
+  }catch(e){
+    log('LOG','上传异常 '+((e&&e.message)||e));
+    if(force) toast('上传失败：'+((e&&e.message)||e));
+  }
+  return false;
+}
+function copyLog(){
+  var t=logText();
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t); }
+    else{
+      var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    toast('日志已复制');
+  }catch(e){ toast('复制失败'); }
+}
+
+window.addEventListener('error', function(e){
+  log('ERR', (e.message||'脚本错误')+' @'+(e.lineno||0)+':'+(e.colno||0));
+});
+window.addEventListener('unhandledrejection', function(e){
+  log('ERR','未处理 Promise: '+((e.reason&&e.reason.message)||e.reason));
+});
 
 /* ================= 渲染列表 ================= */
 function render(){
@@ -773,7 +899,7 @@ function renderFilter(){
       if(t) b.style.color = tagColor(t);
     }
     b.appendChild(el('span','ft', t||'全部'));
-    bindPress(b, function(){ tapFilter(t); }, function(){ longFilter(t); });
+    bindPress(b, function(){ tapFilter(t); }, function(){ longFilter(t); }, 'filter:'+(t||'全部'));
     bar.appendChild(b);
   });
   var arrow=el('button','farrow', filterSide==='right' ? '‹' : '›');
@@ -787,14 +913,18 @@ function tapFilter(t){
   if(!t){ filterTags=[]; }
   else if(filterTags.length===1 && filterTags[0]===t){ filterTags=[]; }
   else { filterTags=[t]; }
+  log('FILTER','短按 '+(t||'全部')+' → ['+filterTags.join('+')+']');
   render();
+  log('FILTER','筛后显示 '+document.querySelectorAll('#list .row').length+' 条');
 }
 function longFilter(t){
   if(!t) return;
   var i=filterTags.indexOf(t);
   if(i>=0) filterTags.splice(i,1);
   else filterTags=filterTags.concat([t]);
+  log('FILTER','长按 '+t+' → ['+filterTags.join('+')+']');
   render();
+  log('FILTER','筛后显示 '+document.querySelectorAll('#list .row').length+' 条');
   toast(filterTags.length?('筛选：'+filterTags.join(' + ')):'显示全部');
 }
 function toggleFilterSide(){
@@ -811,7 +941,8 @@ function applyFilterSide(){
 /* 短按/长按（鼠标 + 触屏）
    触屏上手指轻微滑动不应取消单击，只有移动超过 12px 才算滑走；
    另外用 click 做兵底，防止某些 Android WebView 的事件差异导致短按失效 */
-function bindPress(el, onTap, onLong){
+function bindPress(el, onTap, onLong, label){
+  label = label || 'press';
   var timer=null, longFired=false, isTouch=false, moved=false, active=false;
   var sx=0, sy=0, lastTap=0;
 
@@ -822,8 +953,9 @@ function bindPress(el, onTap, onLong){
     sx = tp ? tp.clientX : (ev.clientX||0);
     sy = tp ? tp.clientY : (ev.clientY||0);
     moved=false; longFired=false; active=true;
+    log('TOUCH', label+' 按下 '+ev.type+' @'+Math.round(sx)+','+Math.round(sy));
     if(timer) clearTimeout(timer);
-    timer=setTimeout(function(){ timer=null; longFired=true; try{ onLong(); }catch(e){} }, 550);
+    timer=setTimeout(function(){ timer=null; longFired=true; log('TOUCH', label+' 长按触发'); try{ onLong(); }catch(e){ log('ERR','长按回调 '+e.message); } }, 550);
   }
   function onMove(ev){
     if(!active || !timer) return;
@@ -833,6 +965,7 @@ function bindPress(el, onTap, onLong){
     if(Math.abs(x-sx) > 12 || Math.abs(y-sy) > 12){
       moved=true;
       if(timer){ clearTimeout(timer); timer=null; }
+      log('TOUCH', label+' 滑动 '+Math.round(x-sx)+','+Math.round(y-sy)+' → 取消');
     }
   }
   function finish(ev, allowTap){
@@ -840,7 +973,8 @@ function bindPress(el, onTap, onLong){
     if(timer){ clearTimeout(timer); timer=null; }
     var doTap = allowTap && active && !longFired && !moved;
     active=false;
-    if(doTap){ lastTap=Date.now(); try{ onTap(); }catch(e){} }
+    log('TOUCH', label+' 抬起 '+((ev&&ev.type)||'')+' → '+(doTap?'单击':(longFired?'已长按':(allowTap?'忽略':'取消'))));
+    if(doTap){ lastTap=Date.now(); try{ onTap(); }catch(e){ log('ERR','单击回调 '+e.message); } }
   }
 
   el.addEventListener('touchstart', begin, {passive:true});
@@ -852,12 +986,12 @@ function bindPress(el, onTap, onLong){
   el.addEventListener('mouseup', function(e){ finish(e,true); });
   el.addEventListener('mouseleave', function(e){ finish(e,false); });
   el.addEventListener('contextmenu', function(e){ e.preventDefault(); });
-  // 兵底：真没处理过才当单击（避免与上面的逻辑重复触发）
   el.addEventListener('click', function(){
-    if(longFired) return;
-    if(Date.now()-lastTap < 500) return;
+    if(longFired){ log('TOUCH', label+' click（已长按，忽略）'); return; }
+    if(Date.now()-lastTap < 500){ log('TOUCH', label+' click（去重忽略）'); return; }
     lastTap=Date.now();
-    try{ onTap(); }catch(e){}
+    log('TOUCH', label+' click → 单击');
+    try{ onTap(); }catch(e){ log('ERR','click 回调 '+e.message); }
   });
 }
 
@@ -1700,6 +1834,8 @@ async function sync(opts){
   }
   syncing=true;
   setStatus('同步中…');
+  var t0=Date.now();
+  log('SYNC','开始（'+(opts.manual?'手动':'自动')+'）');
   var btn=$('#btnSyncNow'); if(btn) btn.disabled=true;
   // 同步前先把正在编辑的内容落下，避免被覆盖时丢字
   try{
@@ -1710,6 +1846,9 @@ async function sync(opts){
     var aText=await getText(fileUrl(F_ACTIVE));
     var bText=await getText(fileUrl(F_DONE));
     var tagText=await getText(fileUrl(F_TAGS));
+    log('SYNC','拉取：便签.csv='+(aText==null?'无':aText.length+'B')
+      +' 已办.csv='+(bText==null?'无':bText.length+'B')
+      +' 标签.txt='+(tagText==null?'无':tagText.length+'B'));
 
     var remoteDoc=null;
     if(aText!=null || bText!=null){
@@ -1731,6 +1870,8 @@ async function sync(opts){
       var r=mergeCloud(localDoc, remoteDoc, loadBase());
       merged=r.doc; conflicts=r.conflicts;
       backupNow(true);                                  // 覆盖本地前先留一份
+      log('SYNC','合并：本地'+localDoc.notes.length+'条 / 云端'+remoteDoc.notes.length+'条 → '
+        +merged.notes.length+'条，冲突'+conflicts);
     }
 
     applyDoc(merged);
@@ -1743,6 +1884,9 @@ async function sync(opts){
     if(changed){
       await putText(fileUrl(F_ACTIVE), csvs.active, 'text/csv; charset=utf-8');
       await putText(fileUrl(F_DONE), csvs.done, 'text/csv; charset=utf-8');
+      log('SYNC','已上传 便签.csv（'+merged.notes.length+'条）/ 已办.csv（'+merged.trash.length+'条）');
+    }else{
+      log('SYNC','云端数据无变化，未上传');
     }
 
     // 标签清单：本地没改过 → 用云端的；本地改过 → 推上去
@@ -1770,11 +1914,15 @@ async function sync(opts){
     setStatus('已同步 '+fmtTime(lastSync)+(conflicts?(' · '+conflicts+' 条冲突按云端为准'):''));
     $('#syncState').textContent='上次同步：'+fmtTime(lastSync)+(changed?'（已上传）':'（已是最新）')+
       (conflicts?('，'+conflicts+' 条冲突按云端为准'):'');
+    log('SYNC','完成，用时'+(Date.now()-t0)+'ms');
+    uploadLog(false);
   }catch(err){
     var msg=(err&&err.message)?err.message:String(err);
+    log('SYNC','失败：'+msg+'（'+fileUrl(F_ACTIVE)+'）');
     setStatus('同步失败：'+msg);
     $('#syncState').textContent='同步失败：'+msg;
     if(opts.manual) toast('同步失败：'+msg);
+    uploadLog(true);
   }finally{
     syncing=false;
     if(btn) btn.disabled=false;
@@ -1927,7 +2075,17 @@ function bind(){
   });
 
   $('#btnTagsDone').addEventListener('click',closeTags);
-  $('#btnNewTag').addEventListener('click',addNewTag);
+  $('#btnLogView').addEventListener('click',openLog);
+  $('#btnCloseLog').addEventListener('click',function(){ $('#sheetLog').hidden=true; });
+  $('#btnCloseLog2').addEventListener('click',function(){ $('#sheetLog').hidden=true; });
+  $('#btnCopyLog').addEventListener('click',copyLog);
+  $('#btnLogUpload').addEventListener('click',function(){ uploadLog(true); });
+  $('#btnLogUpload2').addEventListener('click',function(){ uploadLog(true); });
+  $('#btnLogClear').addEventListener('click',function(){
+    if(!confirm('清空本机日志？')) return;
+    logBuf=[]; try{ localStorage.removeItem(LOG_KEY); }catch(e){}
+    logDirty=true; refreshLogBox(); toast('已清空日志');
+  });  $('#btnNewTag').addEventListener('click',addNewTag);
   $('#newTagInput').addEventListener('keydown',function(e){
     if(e.key==='Enter'){ e.preventDefault(); addNewTag(); }
   });
@@ -1937,6 +2095,7 @@ function bind(){
 
   document.addEventListener('keydown',function(e){
     if(e.key!=='Escape') return;
+    if(!$('#sheetLog').hidden){ $('#sheetLog').hidden=true; return; }
     if(!$('#popTags').hidden){ closeTags(); return; }
     if(!$('#sheetText').hidden){ $('#sheetText').hidden=true; return; }
     if(!$('#sheetTrash').hidden){ $('#sheetTrash').hidden=true; return; }
@@ -1964,6 +2123,13 @@ loadLocal();
   }
 })();
 bind();
+logRestore();
+log('APP','启动 '+APP_VERSION+'｜设备 '+deviceTag());
+log('APP','屏幕 '+((window.screen&&screen.width)||0)+'x'+((window.screen&&screen.height)||0)
+  +'｜可视 '+window.innerWidth+'x'+window.innerHeight+'｜dpr '+(window.devicePixelRatio||1));
+log('APP','环境 notesNative='+(!!window.notesNative)+' Capacitor='+(!!window.Capacitor)
+  +' 触屏='+('ontouchstart' in window)+' 最大触点数='+(navigator.maxTouchPoints||0));
+log('APP','WebDAV '+(davReady()?'已配置':'未配置')+'｜标签 '+tagList.length+' 个｜便签 '+data.notes.length+' 条');
 initDesktop();
 render();
 renderBackupState();
