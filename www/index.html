@@ -563,7 +563,7 @@
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.4　设计：陈师傅　编译：DeepSeek</div>
+    <div class="verline" id="verLine">版本 V1.4.1　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -647,7 +647,7 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.4';
+var APP_VERSION='V1.4.1';
 
 var data={ notes:[], trash:[], gone:{} };
 var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
@@ -941,14 +941,22 @@ function applyFilterSide(){
 /* 短按/长按（鼠标 + 触屏）
    触屏上手指轻微滑动不应取消单击，只有移动超过 12px 才算滑走；
    另外用 click 做兵底，防止某些 Android WebView 的事件差异导致短按失效 */
+/* 全局：最近一次真实触摸的时间。
+   Android 在 touchend 后会补发 mousedown/mouseup/click，
+   而筛选后筛选栏会重建元素（新元素上的局部标记是空的），
+   所以必须用全局时间戳来屏蔽这些合成事件。 */
+var TP_LAST_TOUCH=0, TP_LAST_ACTION=0;
+function tpTouch(){ TP_LAST_TOUCH=Date.now(); }
+function tpGhost(){ return Date.now()-TP_LAST_TOUCH < 1500; }
+
 function bindPress(el, onTap, onLong, label){
   label = label || 'press';
-  var timer=null, longFired=false, isTouch=false, moved=false, active=false;
-  var sx=0, sy=0, lastTap=0;
+  var timer=null, longFired=false, moved=false, active=false;
+  var sx=0, sy=0;
 
   function begin(ev){
-    if(ev.type==='touchstart'){ isTouch=true; }
-    else if(isTouch) return;
+    if(ev.type==='touchstart'){ tpTouch(); }
+    else if(tpGhost()){ return; }          // 触摸后的合成鼠标事件，直接忽略
     var tp=ev.touches && ev.touches[0];
     sx = tp ? tp.clientX : (ev.clientX||0);
     sy = tp ? tp.clientY : (ev.clientY||0);
@@ -969,12 +977,14 @@ function bindPress(el, onTap, onLong, label){
     }
   }
   function finish(ev, allowTap){
-    if(ev && ev.type==='mouseup' && isTouch) return;
+    var isTouchEv = ev && String(ev.type).indexOf('touch')===0;
+    if(isTouchEv) tpTouch();               // 刷新时间戳，盖住后面补发的鼠标事件
+    if(ev && ev.type==='mouseup' && tpGhost()) return;
     if(timer){ clearTimeout(timer); timer=null; }
     var doTap = allowTap && active && !longFired && !moved;
     active=false;
     log('TOUCH', label+' 抬起 '+((ev&&ev.type)||'')+' → '+(doTap?'单击':(longFired?'已长按':(allowTap?'忽略':'取消'))));
-    if(doTap){ lastTap=Date.now(); try{ onTap(); }catch(e){ log('ERR','单击回调 '+e.message); } }
+    if(doTap){ TP_LAST_ACTION=Date.now(); try{ onTap(); }catch(e){ log('ERR','单击回调 '+e.message); } }
   }
 
   el.addEventListener('touchstart', begin, {passive:true});
@@ -987,9 +997,9 @@ function bindPress(el, onTap, onLong, label){
   el.addEventListener('mouseleave', function(e){ finish(e,false); });
   el.addEventListener('contextmenu', function(e){ e.preventDefault(); });
   el.addEventListener('click', function(){
-    if(longFired){ log('TOUCH', label+' click（已长按，忽略）'); return; }
-    if(Date.now()-lastTap < 500){ log('TOUCH', label+' click（去重忽略）'); return; }
-    lastTap=Date.now();
+    if(tpGhost()){ log('TOUCH', label+' click（触摸后的合成事件，忽略）'); return; }
+    if(Date.now()-TP_LAST_ACTION < 500){ log('TOUCH', label+' click（去重，忽略）'); return; }
+    TP_LAST_ACTION=Date.now();
     log('TOUCH', label+' click → 单击');
     try{ onTap(); }catch(e){ log('ERR','click 回调 '+e.message); }
   });
