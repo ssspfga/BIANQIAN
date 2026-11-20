@@ -234,6 +234,8 @@
     padding:3px 2px;border-bottom:1px solid #f0f4fa;
     font-family:inherit;color:#7b8496;overflow:hidden;
     transition:background .13s,color .13s;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    touch-action:manipulation;
   }
   .fitem:active{filter:brightness(.97)}
   .fitem .ft{
@@ -547,7 +549,7 @@
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.3　设计：陈师傅　编译：DeepSeek</div>
+    <div class="verline" id="verLine">版本 V1.3.1　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -611,7 +613,7 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.3';
+var APP_VERSION='V1.3.1';
 
 var data={ notes:[], trash:[], gone:{} };
 var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
@@ -806,28 +808,57 @@ function applyFilterSide(){
   m.classList.toggle('filter-right', filterSide==='right');
 }
 
-/* 短按/长按（鼠标 + 触屏） */
+/* 短按/长按（鼠标 + 触屏）
+   触屏上手指轻微滑动不应取消单击，只有移动超过 12px 才算滑走；
+   另外用 click 做兵底，防止某些 Android WebView 的事件差异导致短按失效 */
 function bindPress(el, onTap, onLong){
-  var timer=null, fired=false, isTouch=false;
-  function start(ev){
-    if(ev.type==='touchstart') isTouch=true;
+  var timer=null, longFired=false, isTouch=false, moved=false, active=false;
+  var sx=0, sy=0, lastTap=0;
+
+  function begin(ev){
+    if(ev.type==='touchstart'){ isTouch=true; }
     else if(isTouch) return;
-    fired=false;
-    timer=setTimeout(function(){ timer=null; fired=true; try{ onLong(); }catch(e){} }, 550);
+    var tp=ev.touches && ev.touches[0];
+    sx = tp ? tp.clientX : (ev.clientX||0);
+    sy = tp ? tp.clientY : (ev.clientY||0);
+    moved=false; longFired=false; active=true;
+    if(timer) clearTimeout(timer);
+    timer=setTimeout(function(){ timer=null; longFired=true; try{ onLong(); }catch(e){} }, 550);
   }
-  function end(ev){
-    if(ev.type==='mouseup' && isTouch) return;
+  function onMove(ev){
+    if(!active || !timer) return;
+    var tp=ev.touches && ev.touches[0];
+    var x = tp ? tp.clientX : ev.clientX;
+    var y = tp ? tp.clientY : ev.clientY;
+    if(Math.abs(x-sx) > 12 || Math.abs(y-sy) > 12){
+      moved=true;
+      if(timer){ clearTimeout(timer); timer=null; }
+    }
+  }
+  function finish(ev, allowTap){
+    if(ev && ev.type==='mouseup' && isTouch) return;
     if(timer){ clearTimeout(timer); timer=null; }
-    if(!fired){ try{ onTap(); }catch(e){} }
+    var doTap = allowTap && active && !longFired && !moved;
+    active=false;
+    if(doTap){ lastTap=Date.now(); try{ onTap(); }catch(e){} }
   }
-  function cancel(){ if(timer){ clearTimeout(timer); timer=null; } fired=true; }
-  el.addEventListener('touchstart', start, {passive:true});
-  el.addEventListener('touchend', end);
-  el.addEventListener('touchmove', cancel, {passive:true});
-  el.addEventListener('mousedown', start);
-  el.addEventListener('mouseup', end);
-  el.addEventListener('mouseleave', cancel);
+
+  el.addEventListener('touchstart', begin, {passive:true});
+  el.addEventListener('touchmove', onMove, {passive:true});
+  el.addEventListener('touchend', function(e){ finish(e,true); });
+  el.addEventListener('touchcancel', function(e){ finish(e,false); });
+  el.addEventListener('mousedown', begin);
+  el.addEventListener('mousemove', onMove);
+  el.addEventListener('mouseup', function(e){ finish(e,true); });
+  el.addEventListener('mouseleave', function(e){ finish(e,false); });
   el.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  // 兵底：真没处理过才当单击（避免与上面的逻辑重复触发）
+  el.addEventListener('click', function(){
+    if(longFired) return;
+    if(Date.now()-lastTap < 500) return;
+    lastTap=Date.now();
+    try{ onTap(); }catch(e){}
+  });
 }
 
 /* 行内标签按钮 + 标签弹层 */

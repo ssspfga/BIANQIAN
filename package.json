@@ -1,6 +1,6 @@
 {
   "name": "notes-biji",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "便签 · Windows(Electron) 与 Android(Capacitor) 共用同一套界面",
   "main": "electron/main.js",
