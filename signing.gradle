@@ -1,3 +1,6 @@
+// 固定签名配置
+// 构建时由 GitHub Actions 复制到 android/app/signing.gradle 并 apply
+// 真正的 keystore 文件不放在仓库里，由 workflow 从 Secret(KEYSTORE_BASE64) 解码生成
 android {
     signingConfigs {
         biji {
@@ -8,7 +11,11 @@ android {
         }
     }
     buildTypes {
-        debug { signingConfig signingConfigs.biji }
-        release { signingConfig signingConfigs.biji }
+        debug {
+            signingConfig signingConfigs.biji
+        }
+        release {
+            signingConfig signingConfigs.biji
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron');
 const path = require('path');

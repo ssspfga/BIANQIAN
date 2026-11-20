@@ -204,6 +204,79 @@
   .pin.on{color:var(--accent)}
   .row:not(:hover) .pin:not(.on){opacity:.45}
 
+  /* ---------- 标签按钮 ---------- */
+  .tagbtn{
+    width:26px;height:26px;flex:none;margin-top:1px;position:relative;
+    border:none;background:transparent;border-radius:9px;
+    color:#c3cad8;display:grid;place-items:center;cursor:pointer;
+    transition:color .13s,background .13s;
+  }
+  .tagbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .row:hover .tagbtn{color:#9aa4b6}
+  .tagbtn:hover{background:#e8eefb;color:var(--accent)}
+  .tagbtn.on{color:var(--accent)}
+  .tagbtn .tdot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;border:1px solid #fff;display:block}
+  .row:not(:hover) .tagbtn:not(.on){opacity:.45}
+
+  /* ---------- 主区：列表 + 竖向筛选栏 ---------- */
+  .main{flex:1;min-height:0;display:flex}
+  .listwrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+  .filterbar{
+    flex:none;width:46px;display:flex;flex-direction:column;
+    padding:2px 0 4px;border-right:1px solid var(--line);
+    background:#fcfdff;overflow:hidden;
+  }
+  .main.filter-right .filterbar{order:2;border-right:none;border-left:1px solid var(--line)}
+  .fitem{
+    flex:1 1 0;max-height:96px;min-height:22px;
+    border:none;background:transparent;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    padding:3px 2px;border-bottom:1px solid #f0f4fa;
+    font-family:inherit;color:#7b8496;overflow:hidden;
+    transition:background .13s,color .13s;
+  }
+  .fitem:active{filter:brightness(.97)}
+  .fitem .ft{
+    writing-mode:vertical-rl;text-orientation:upright;
+    font-size:11px;letter-spacing:1px;line-height:1.15;
+    max-height:100%;overflow:hidden;
+  }
+  .fitem.on{color:#fff;font-weight:600}
+  .farrow{
+    flex:none;height:26px;border:none;background:transparent;cursor:pointer;
+    color:#9aa4b6;font-size:14px;border-top:1px solid var(--line);
+    font-family:inherit;line-height:1;
+  }
+  .farrow:hover{color:var(--accent)}
+
+  /* ---------- 标签弹层 ---------- */
+  .pop{
+    position:fixed;inset:0;z-index:70;padding:20px;
+    background:rgba(22,28,40,.34);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .pop-card{
+    width:min(430px,100%);max-height:82vh;background:#fff;border-radius:18px;
+    padding:16px;display:flex;flex-direction:column;gap:10px;
+    box-shadow:0 18px 50px rgba(20,26,38,.3);
+  }
+  .pop-title{font-size:15px;font-weight:700;text-align:center}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;max-height:36vh;overflow:auto;padding:2px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    border:1.5px solid var(--line);background:#fff;border-radius:20px;
+    padding:6px 12px;font-family:inherit;font-size:13px;color:#4a5465;cursor:pointer;
+  }
+  .chip .dot{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+  .chip.on{border-color:var(--accent);background:#f2f7ff;color:var(--accent);font-weight:600}
+  .tag-new{display:flex;gap:8px}
+  .tag-new input{
+    flex:1;min-width:0;border:1px solid var(--line);border-radius:11px;
+    padding:9px 11px;font-family:inherit;font-size:13.5px;outline:none;color:inherit;
+  }
+  .tag-new input:focus{border-color:rgba(47,124,246,.55);box-shadow:0 0 0 3px rgba(47,124,246,.10)}
+  .pop-foot{display:flex}
+
   .empty{text-align:center;color:var(--muted);font-size:13.5px;line-height:1.8;padding:34px 26px;flex:1}
 
   /* ---------- 底部 ---------- */
@@ -368,8 +441,13 @@
     <input id="newInput" type="text" placeholder="新建便签…（回车保存）" autocomplete="off" enterkeyhint="done">
   </div>
 
-  <div class="list" id="list"></div>
-  <div class="empty" id="empty">还没有便签<br>在上面那行写点什么，回车就创建了</div>
+  <div class="main" id="main">
+    <div class="filterbar" id="filterbar"></div>
+    <div class="listwrap">
+      <div class="list" id="list"></div>
+      <div class="empty" id="empty">还没有便签<br>在上面那行写点什么，回车就创建了</div>
+    </div>
+  </div>
 
   <div class="foot">
     <span id="status">就绪</span>
@@ -462,7 +540,7 @@
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.1.1</div>
+    <div class="verline" id="verLine">版本 V1.2　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -479,6 +557,18 @@
   </section>
 
 </div>
+</div>
+
+<div class="pop" id="popTags" hidden>
+  <div class="pop-card">
+    <div class="pop-title">标签</div>
+    <div class="chips" id="tagChips"></div>
+    <div class="tag-new">
+      <input id="newTagInput" type="text" placeholder="新建标签，例如：客户 / 当前待办" autocomplete="off">
+      <button class="mini" id="btnNewTag" type="button">新建</button>
+    </div>
+    <div class="pop-foot"><button class="btn primary" id="btnTagsDone" type="button">完成</button></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -514,10 +604,10 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.1.1';
+var APP_VERSION='V1.2';
 
 var data={ notes:[], trash:[], gone:{} };
-var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3 };
+var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
 var edit={ noteId:null, childId:null };
 var syncing=false, lastSync=0, statusText='就绪';
 
@@ -527,6 +617,7 @@ function normalizeNotes(arr){
     c.id=c.id||uid();
     c.text=c.text||'';
     c.pinned=!!c.pinned;
+    c.tags=Array.isArray(c.tags)?c.tags.filter(function(t){ return typeof t==='string' && t.trim(); }).map(function(t){ return t.trim(); }):[];
     c.createdAt=c.createdAt||Date.now();
     c.updatedAt=c.updatedAt||c.createdAt;
     c.children=Array.isArray(c.children)?c.children.map(function(k){
@@ -574,9 +665,13 @@ function render(){
   var notes=data.notes.slice().sort(function(a,b){
     if(!!b.pinned!==!!a.pinned) return b.pinned?1:-1;
     return (b.createdAt||0)-(a.createdAt||0);
-  });
-  $('#empty').hidden=notes.length>0;
+  }).filter(matchesFilter);
+  var em=$('#empty');
+  em.innerHTML = filterTags.length ? '这个筛选下没有便签' : '还没有便签<br>在上面那行写点什么，回车就创建了';
+  em.hidden=notes.length>0;
   notes.forEach(function(n){ list.appendChild(noteRow(n)); });
+
+  renderFilter();
 
   $('#subtitle').textContent = davReady() ? (cfg.folder||'WebDAV') : '本地';
   $('#btnQuickSync').hidden = !davReady();
@@ -590,6 +685,184 @@ function focusEditor(){
   if(!ta) return;
   ta.focus();
   try{ ta.setSelectionRange(ta.value.length, ta.value.length); }catch(e){}
+}
+
+/* ================= 标签 & 筛选 ================= */
+var filterTags=[];                                   // 当前筛选的标签（多个 = 同时满足）
+var filterSide=(cfg.filterSide==='left')?'left':'right';
+var tagTarget=null;
+
+function tagHue(t){
+  var h=0;
+  for(var i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))%360;
+  return h;
+}
+function tagColor(t){ return 'hsl('+tagHue(t)+',62%,48%)'; }
+function tagColorBg(t){ return 'hsla('+tagHue(t)+',62%,48%,.13)'; }
+
+function allTags(){
+  var cnt={}, arr=[];
+  data.notes.forEach(function(n){
+    (n.tags||[]).forEach(function(t){
+      if(cnt[t]==null){ cnt[t]=0; arr.push(t); }
+      cnt[t]++;
+    });
+  });
+  arr.sort(function(a,b){ return (cnt[b]-cnt[a]) || (a<b?-1:1); });
+  return arr;
+}
+
+function matchesFilter(n){
+  if(!filterTags.length) return true;
+  var t=n.tags||[];
+  for(var i=0;i<filterTags.length;i++){ if(t.indexOf(filterTags[i])<0) return false; }
+  return true;
+}
+function isFilterOn(t){
+  if(!t) return filterTags.length===0;
+  return filterTags.indexOf(t)>=0;
+}
+
+function renderFilter(){
+  var bar=$('#filterbar');
+  if(!bar) return;
+  bar.textContent='';
+  var items=[null].concat(allTags());
+  items.forEach(function(t){
+    var on=isFilterOn(t);
+    var b=el('button','fitem'+(on?' on':''));
+    b.type='button';
+    b.title = t ? ('短按：只看「'+t+'」；长按：叠加筛选') : '显示全部';
+    if(on){
+      b.style.background = t ? tagColorBg(t) : 'var(--accent)';
+      if(t) b.style.color = tagColor(t);
+    }
+    b.appendChild(el('span','ft', t||'全部'));
+    bindPress(b, function(){ tapFilter(t); }, function(){ longFilter(t); });
+    bar.appendChild(b);
+  });
+  var arrow=el('button','farrow', filterSide==='right' ? '‹' : '›');
+  arrow.type='button';
+  arrow.title='筛选栏换到另一边';
+  arrow.addEventListener('click', toggleFilterSide);
+  bar.appendChild(arrow);
+}
+
+function tapFilter(t){
+  if(!t){ filterTags=[]; }
+  else if(filterTags.length===1 && filterTags[0]===t){ filterTags=[]; }
+  else { filterTags=[t]; }
+  render();
+}
+function longFilter(t){
+  if(!t) return;
+  var i=filterTags.indexOf(t);
+  if(i>=0) filterTags.splice(i,1);
+  else filterTags=filterTags.concat([t]);
+  render();
+  toast(filterTags.length?('筛选：'+filterTags.join(' + ')):'显示全部');
+}
+function toggleFilterSide(){
+  filterSide = (filterSide==='right') ? 'left' : 'right';
+  cfg.filterSide=filterSide; saveCfg();
+  applyFilterSide();
+  renderFilter();
+}
+function applyFilterSide(){
+  var m=$('#main'); if(!m) return;
+  m.classList.toggle('filter-right', filterSide==='right');
+}
+
+/* 短按/长按（鼠标 + 触屏） */
+function bindPress(el, onTap, onLong){
+  var timer=null, fired=false, isTouch=false;
+  function start(ev){
+    if(ev.type==='touchstart') isTouch=true;
+    else if(isTouch) return;
+    fired=false;
+    timer=setTimeout(function(){ timer=null; fired=true; try{ onLong(); }catch(e){} }, 550);
+  }
+  function end(ev){
+    if(ev.type==='mouseup' && isTouch) return;
+    if(timer){ clearTimeout(timer); timer=null; }
+    if(!fired){ try{ onTap(); }catch(e){} }
+  }
+  function cancel(){ if(timer){ clearTimeout(timer); timer=null; } fired=true; }
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchmove', cancel, {passive:true});
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', cancel);
+  el.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+}
+
+/* 行内标签按钮 + 标签弹层 */
+function tagBtnFor(n){
+  var has=(n.tags||[]).length>0;
+  var b=el('button','tagbtn'+(has?' on':''));
+  b.type='button';
+  b.title=has?('标签：'+n.tags.join(' / ')):'设置标签';
+  b.setAttribute('aria-label','设置标签');
+  b.innerHTML='<svg viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-6.2-6.2A2 2 0 0 1 3.8 13V6a2 2 0 0 1 2-2h7a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.4z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>';
+  if(has){
+    var d=el('i','tdot'); d.style.background=tagColor(n.tags[0]); b.appendChild(d);
+  }
+  b.addEventListener('click',function(e){ e.stopPropagation(); openTags(n.id); });
+  return b;
+}
+
+function openTags(id){
+  tagTarget=id;
+  var inp=$('#newTagInput'); if(inp) inp.value='';
+  renderTagChips();
+  $('#popTags').hidden=false;
+}
+function closeTags(){ $('#popTags').hidden=true; tagTarget=null; }
+
+function renderTagChips(){
+  var box=$('#tagChips'); if(!box) return;
+  box.textContent='';
+  var n=findNote(tagTarget);
+  if(!n) return;
+  var list=allTags();
+  (n.tags||[]).forEach(function(t){ if(list.indexOf(t)<0) list.unshift(t); });
+  if(!list.length){
+    box.appendChild(el('div','hint','还没有标签，在下面输入框新建一个'));
+    return;
+  }
+  list.forEach(function(t){
+    var on=(n.tags||[]).indexOf(t)>=0;
+    var c=el('button','chip'+(on?' on':''));
+    c.type='button';
+    var dot=el('i','dot'); dot.style.background=tagColor(t); c.appendChild(dot);
+    c.appendChild(el('span','',t));
+    c.addEventListener('click',function(){ toggleTagOnNote(n.id,t); });
+    box.appendChild(c);
+  });
+}
+
+function toggleTagOnNote(id,t){
+  var n=findNote(id); if(!n) return;
+  n.tags=n.tags||[];
+  var i=n.tags.indexOf(t);
+  if(i>=0) n.tags.splice(i,1); else n.tags.push(t);
+  n.updatedAt=Date.now();
+  saveLocal(); renderTagChips(); render(); scheduleSync();
+}
+
+function addNewTag(){
+  var inp=$('#newTagInput');
+  if(!inp) return;
+  var v=(inp.value||'').trim();
+  if(!v){ inp.focus(); return; }
+  var n=findNote(tagTarget);
+  if(!n) return;
+  n.tags=n.tags||[];
+  if(n.tags.indexOf(v)<0){ n.tags.push(v); n.updatedAt=Date.now(); }
+  inp.value='';
+  saveLocal(); renderTagChips(); render(); scheduleSync();
+  toast('已加标签：'+v);
 }
 
 function noteRow(n){
@@ -653,6 +926,7 @@ function noteRow(n){
 
   row.appendChild(chk);
   row.appendChild(body);
+  row.appendChild(tagBtnFor(n));
   row.appendChild(pin);
   return row;
 }
@@ -1164,7 +1438,7 @@ function sig(x){ return x==null?'#':JSON.stringify(sortKeys(x)); }
 function docSig(d){ return sig({ notes:(d&&d.notes)||[], trash:(d&&d.trash)||[], gone:(d&&d.gone)||{} }); }
 
 /* ================= 明文 CSV ================= */
-var CSV_HEADER=['Id','父Id','排序','内容','状态','已完成','置顶','创建时间','更新时间','删除时间'];
+var CSV_HEADER=['Id','父Id','排序','内容','状态','已完成','置顶','创建时间','更新时间','删除时间','标签'];
 
 function fmtDT(ts){
   if(!ts) return '';
@@ -1208,22 +1482,23 @@ function isYes(v){ v=String(v||'').trim(); return v==='是'||v==='已办'||v==='
 /* 文档 -> 行 */
 function docToRows(doc){
   var rows=[];
+  function tagsOf(o){ return (o&&Array.isArray(o.tags))?o.tags.join('|'):''; }
   (doc.notes||[]).forEach(function(n){
-    rows.push([n.id,'','',n.text||'','正常','',n.pinned?'是':'',fmtDT(n.createdAt),fmtDT(n.updatedAt),'']);
+    rows.push([n.id,'','',n.text||'','正常','',n.pinned?'是':'',fmtDT(n.createdAt),fmtDT(n.updatedAt),'',tagsOf(n)]);
     (n.children||[]).forEach(function(k,i){
-      rows.push([k.id,n.id,String(i+1),k.text||'','正常',k.done?'已办':'','',fmtDT(k.updatedAt||n.updatedAt),fmtDT(k.updatedAt||n.updatedAt),'']);
+      rows.push([k.id,n.id,String(i+1),k.text||'','正常',k.done?'已办':'','',fmtDT(k.updatedAt||n.updatedAt),fmtDT(k.updatedAt||n.updatedAt),'','']);
     });
   });
   (doc.trash||[]).forEach(function(n){
     var del=fmtDT(n.deletedAt||n.updatedAt);
-    rows.push([n.id,'','',n.text||'','已办','',n.pinned?'是':'',fmtDT(n.createdAt),fmtDT(n.updatedAt),del]);
+    rows.push([n.id,'','',n.text||'','已办','',n.pinned?'是':'',fmtDT(n.createdAt),fmtDT(n.updatedAt),del,tagsOf(n)]);
     (n.children||[]).forEach(function(k,i){
-      rows.push([k.id,n.id,String(i+1),k.text||'','已办',k.done?'已办':'','',fmtDT(k.updatedAt||n.updatedAt),fmtDT(k.updatedAt||n.updatedAt),del]);
+      rows.push([k.id,n.id,String(i+1),k.text||'','已办',k.done?'已办':'','',fmtDT(k.updatedAt||n.updatedAt),fmtDT(k.updatedAt||n.updatedAt),del,'']);
     });
   });
   var g=doc.gone||{};
   Object.keys(g).forEach(function(id){
-    rows.push([id,'','','','已删','','',fmtDT(g[id]),fmtDT(g[id]),fmtDT(g[id])]);
+    rows.push([id,'','','','已删','','',fmtDT(g[id]),fmtDT(g[id]),fmtDT(g[id]),'']);
   });
   return rows;
 }
@@ -1261,7 +1536,8 @@ function textToRows(text){
       pinned:String(r[6]||'').trim(),
       created:parseDT(r[7]),
       updated:parseDT(r[8]),
-      deleted:parseDT(r[9])
+      deleted:parseDT(r[9]),
+      tags:String(r[10]==null?'':r[10]).split('|').map(function(t){ return t.trim(); }).filter(Boolean)
     });
   }
   return out;
@@ -1281,7 +1557,7 @@ function csvsToDoc(activeText, doneText){
       return { id:k.id, text:k.text, done:isYes(k.done), updatedAt:k.updated||r.updated||Date.now() };
     });
     var n={
-      id:id, text:r.text, pinned:isYes(r.pinned), children:ch,
+      id:id, text:r.text, pinned:isYes(r.pinned), children:ch, tags:r.tags||[],
       createdAt:r.created||r.updated||Date.now(),
       updatedAt:r.updated||r.created||Date.now()
     };
@@ -1538,8 +1814,18 @@ function bind(){
     try{ document.execCommand('copy'); toast('已复制'); }catch(e){ toast('请手动复制'); }
   });
 
+  $('#btnTagsDone').addEventListener('click',closeTags);
+  $('#btnNewTag').addEventListener('click',addNewTag);
+  $('#newTagInput').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); addNewTag(); }
+  });
+  $('#popTags').addEventListener('click',function(e){
+    if(e.target && e.target.id==='popTags') closeTags();
+  });
+
   document.addEventListener('keydown',function(e){
     if(e.key!=='Escape') return;
+    if(!$('#popTags').hidden){ closeTags(); return; }
     if(!$('#sheetText').hidden){ $('#sheetText').hidden=true; return; }
     if(!$('#sheetTrash').hidden){ $('#sheetTrash').hidden=true; return; }
     if(!$('#sheetSettings').hidden){ $('#sheetSettings').hidden=true; return; }
@@ -1560,8 +1846,9 @@ render();
 renderBackupState();
 (function(){
   var v=$('#verLine');
-  if(v) v.textContent='版本 '+APP_VERSION;
+  if(v) v.textContent='版本 '+APP_VERSION+'　设计：陈师傅　编译：DeepSeek';
 })();
+applyFilterSide();
 setTimeout(function(){
   if(davReady()){
     setStatus(lastSync?('已同步 '+fmtTime(lastSync)):'尚未同步');
