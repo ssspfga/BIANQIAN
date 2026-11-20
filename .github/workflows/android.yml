@@ -77,8 +77,9 @@ jobs:
           fi
           cp signing.gradle android/app/signing.gradle
           printf '\napply from: "signing.gradle"\n' >> android/app/build.gradle
+          APPVER=$(node -p "require('./package.json').version")
           sed -i 's/versionCode 1/versionCode ${{ github.run_number }}/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "1.1.1"/' android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"$APPVER\"/" android/app/build.gradle
           echo "===== 版本信息 ====="
           grep -n 'versionCode\|versionName' android/app/build.gradle || true
           echo "固定签名已配置完成"
