@@ -269,6 +269,13 @@
   }
   .chip .dot{width:8px;height:8px;border-radius:50%;flex:none;display:block}
   .chip.on{border-color:var(--accent);background:#f2f7ff;color:var(--accent);font-weight:600}
+  .chip .del{
+    border:none;background:transparent;color:#aab2c0;font-size:14px;line-height:1;
+    padding:0 0 0 3px;cursor:pointer;font-family:inherit;
+  }
+  .chip .del:hover{color:var(--danger)}
+  .chip.on .del{color:#7fa9ee}
+  .chip.on .del:hover{color:var(--danger)}
   .tag-new{display:flex;gap:8px}
   .tag-new input{
     flex:1;min-width:0;border:1px solid var(--line);border-radius:11px;
@@ -540,7 +547,7 @@
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.2　设计：陈师傅　编译：DeepSeek</div>
+    <div class="verline" id="verLine">版本 V1.3　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -604,7 +611,7 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.2';
+var APP_VERSION='V1.3';
 
 var data={ notes:[], trash:[], gone:{} };
 var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
@@ -691,6 +698,10 @@ function focusEditor(){
 var filterTags=[];                                   // 当前筛选的标签（多个 = 同时满足）
 var filterSide=(cfg.filterSide==='left')?'left':'right';
 var tagTarget=null;
+var tagList=[];                                      // 固定标签清单
+var tagsDirty=false;                                 // 本地改过标签（用于同步时推上去）
+var DEFAULT_TAGS=['客户','当前待办','私人'];
+var LS_TAGS='notes.tags.v1';
 
 function tagHue(t){
   var h=0;
@@ -700,15 +711,37 @@ function tagHue(t){
 function tagColor(t){ return 'hsl('+tagHue(t)+',62%,48%)'; }
 function tagColorBg(t){ return 'hsla('+tagHue(t)+',62%,48%,.13)'; }
 
+function saveTags(){ try{ localStorage.setItem(LS_TAGS, JSON.stringify(tagList)); }catch(e){} }
+function loadTagsStored(){
+  try{
+    var a=JSON.parse(localStorage.getItem(LS_TAGS)||'null');
+    if(Array.isArray(a)) return a.filter(function(t){ return typeof t==='string' && t.trim(); }).map(function(t){ return t.trim(); });
+  }catch(e){}
+  return null;
+}
+function parseTagFile(text){
+  return String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/)
+    .map(function(x){ return x.replace(/^#.*$/,'').trim(); })
+    .filter(Boolean);
+}
+/* 首次运行：从随应用打包的 标签.txt 读默认清单 */
+function loadDefaultTagFile(cb){
+  var N=window.notesNative;
+  if(N && typeof N.readText==='function'){
+    N.readText('标签.txt').then(function(t){ cb(parseTagFile(t)); }).catch(function(){ cb(null); });
+    return;
+  }
+  fetch('标签.txt',{cache:'no-store'}).then(function(r){ return r.ok?r.text():''; })
+    .then(function(t){ cb(parseTagFile(t)); }).catch(function(){ cb(null); });
+}
+
+/* 所有可用标签：固定清单 + 便签上出现但清单里没有的 */
 function allTags(){
-  var cnt={}, arr=[];
-  data.notes.forEach(function(n){
-    (n.tags||[]).forEach(function(t){
-      if(cnt[t]==null){ cnt[t]=0; arr.push(t); }
-      cnt[t]++;
-    });
+  var arr=tagList.slice(), seen={};
+  arr.forEach(function(t){ seen[t]=1; });
+  data.notes.concat(data.trash).forEach(function(n){
+    (n.tags||[]).forEach(function(t){ if(!seen[t]){ seen[t]=1; arr.push(t); } });
   });
-  arr.sort(function(a,b){ return (cnt[b]-cnt[a]) || (a<b?-1:1); });
   return arr;
 }
 
@@ -826,20 +859,47 @@ function renderTagChips(){
   var n=findNote(tagTarget);
   if(!n) return;
   var list=allTags();
-  (n.tags||[]).forEach(function(t){ if(list.indexOf(t)<0) list.unshift(t); });
   if(!list.length){
     box.appendChild(el('div','hint','还没有标签，在下面输入框新建一个'));
     return;
   }
   list.forEach(function(t){
     var on=(n.tags||[]).indexOf(t)>=0;
-    var c=el('button','chip'+(on?' on':''));
-    c.type='button';
+    var c=el('div','chip'+(on?' on':''));
+    c.title='点一下：打上/取消这个标签';
     var dot=el('i','dot'); dot.style.background=tagColor(t); c.appendChild(dot);
     c.appendChild(el('span','',t));
     c.addEventListener('click',function(){ toggleTagOnNote(n.id,t); });
+    var del=el('button','del','×');
+    del.type='button';
+    del.title='删除这个标签（所有便签都会去掉它）';
+    del.addEventListener('click',function(e){ e.stopPropagation(); askDeleteTag(t); });
+    c.appendChild(del);
     box.appendChild(c);
   });
+}
+
+/* 删除标签（从所有便签 + 固定清单里移除） */
+function askDeleteTag(t){
+  var used=0;
+  data.notes.concat(data.trash).forEach(function(n){ if((n.tags||[]).indexOf(t)>=0) used++; });
+  var msg='删除标签「'+t+'」？';
+  if(used) msg+='\n\n有 '+used+' 条便签用了它，删除后这些便签会去掉这个标签。';
+  if(!confirm(msg)) return;
+  deleteTag(t);
+}
+function deleteTag(t){
+  data.notes.concat(data.trash).forEach(function(n){
+    if(!n.tags || n.tags.indexOf(t)<0) return;
+    n.tags=n.tags.filter(function(x){ return x!==t; });
+    if(!n.deletedAt) n.updatedAt=Date.now();
+  });
+  tagList=tagList.filter(function(x){ return x!==t; });
+  filterTags=filterTags.filter(function(x){ return x!==t; });
+  tagsDirty=true;
+  saveTags(); saveLocal();
+  renderTagChips(); render(); scheduleSync();
+  toast('已删除标签：'+t);
 }
 
 function toggleTagOnNote(id,t){
@@ -860,8 +920,9 @@ function addNewTag(){
   if(!n) return;
   n.tags=n.tags||[];
   if(n.tags.indexOf(v)<0){ n.tags.push(v); n.updatedAt=Date.now(); }
+  if(tagList.indexOf(v)<0){ tagList.push(v); tagsDirty=true; }
   inp.value='';
-  saveLocal(); renderTagChips(); render(); scheduleSync();
+  saveTags(); saveLocal(); renderTagChips(); render(); scheduleSync();
   toast('已加标签：'+v);
 }
 
@@ -1285,7 +1346,7 @@ function restoreBackup(){
 }
 
 /* ================= WebDAV ================= */
-var F_ACTIVE='便签.csv', F_DONE='已办.csv', F_LEGACY='便签.json';
+var F_ACTIVE='便签.csv', F_DONE='已办.csv', F_LEGACY='便签.json', F_TAGS='标签.txt';
 
 function davReady(){ return !!(cfg.url && cfg.user && cfg.pass); }
 function baseUrl(){ return String(cfg.url||'').trim().replace(/\/+$/,'')+'/'; }
@@ -1617,6 +1678,7 @@ async function sync(opts){
   try{
     var aText=await getText(fileUrl(F_ACTIVE));
     var bText=await getText(fileUrl(F_DONE));
+    var tagText=await getText(fileUrl(F_TAGS));
 
     var remoteDoc=null;
     if(aText!=null || bText!=null){
@@ -1651,6 +1713,25 @@ async function sync(opts){
       await putText(fileUrl(F_ACTIVE), csvs.active, 'text/csv; charset=utf-8');
       await putText(fileUrl(F_DONE), csvs.done, 'text/csv; charset=utf-8');
     }
+
+    // 标签清单：本地没改过 → 用云端的；本地改过 → 推上去
+    var needTagPush=false;
+    if(tagText==null){
+      needTagPush = tagList.length>0;
+    }else if(tagsDirty){
+      needTagPush = stripBom(tagText).trim() !== tagList.join('\n').trim();
+    }else{
+      var ct=parseTagFile(tagText);
+      if(ct.join('\n') !== tagList.join('\n')){
+        tagList=ct; saveTags();
+      }
+    }
+    if(needTagPush){
+      await putText(fileUrl(F_TAGS), (tagList.join('\n')+'\n'), 'text/plain; charset=utf-8');
+      tagsDirty=false;
+    }
+    // 筛选里如果残留了已不存在的标签，清掉
+    filterTags=filterTags.filter(function(t){ return allTags().indexOf(t)>=0; });
 
     saveBase(merged);
     lastSync=Date.now();
@@ -1840,6 +1921,17 @@ function bind(){
 
 /* ================= 启动 ================= */
 loadLocal();
+(function(){
+  var stored=loadTagsStored();
+  if(stored){ tagList=stored; }
+  else{
+    tagList=DEFAULT_TAGS.slice();
+    saveTags();
+    loadDefaultTagFile(function(list){
+      if(list && list.length){ tagList=list; saveTags(); render(); }
+    });
+  }
+})();
 bind();
 initDesktop();
 render();

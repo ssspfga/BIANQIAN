@@ -355,3 +355,10 @@ ipcMain.handle('open-backup-dir', async () => {
   return { ok: true, dir };
 });
 
+
+/* ================= 读取随应用打包的文本文件（如 标签.txt） ================= */
+ipcMain.handle('read-app-text', async (_e, name) => {
+  const safe = path.basename(String(name || ''));
+  const p = path.join(__dirname, '..', 'www', safe);
+  return await fs.promises.readFile(p, 'utf8');
+});

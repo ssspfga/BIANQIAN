@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('notesNative', {
   // 本地备份落盘 / 打开备份目录
   localBackup: (req) => ipcRenderer.invoke('local-backup', req),
   openBackupDir: () => ipcRenderer.invoke('open-backup-dir'),
+  // 读取随应用打包的文本文件（如 标签.txt）
+  readText: (name) => ipcRenderer.invoke('read-app-text', name),
 
   // 窗口：置顶 / 贴边收起 / 最小化 / 关闭
   win: {
