@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('notesNative', {
     expand: () => ipcRenderer.send('win-expand'),
     onState: (cb) => {
       ipcRenderer.on('win-state', (_e, s) => cb(s));
+    },
+    onLog: (cb) => {
+      ipcRenderer.on('win-log', (_e, m) => cb(m));
     }
   },
 

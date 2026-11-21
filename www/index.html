@@ -563,7 +563,7 @@
       <button class="btn" id="btnSyncNow">立即同步</button>
       <button class="btn primary" id="btnSaveSettings">保存并同步</button>
     </div>
-    <div class="verline" id="verLine">版本 V1.4.1　设计：陈师傅　编译：DeepSeek</div>
+    <div class="verline" id="verLine">版本 V1.4.2　设计：陈师傅　编译：DeepSeek</div>
   </section>
 
   <!-- 文本兜底 -->
@@ -647,7 +647,7 @@ var PIN_SVG='<svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 3h6l-1 5 3
 
 /* ================= 数据 ================= */
 var LS_DATA='notes.data.v1', LS_CFG='notes.cfg.v1', LS_SYNC='notes.lastSync.v1', LS_BASE='notes.base.v1', LS_BK='notes.backup.v1';
-var APP_VERSION='V1.4.1';
+var APP_VERSION='V1.4.2';
 
 var data={ notes:[], trash:[], gone:{} };
 var cfg={ url:'https://dav.jianguoyun.com/dav/', user:'', pass:'', folder:'便签', auto:true, winOnTop:true, dockEnabled:true, autoStart:true, cfgVer:3, filterSide:'right' };
@@ -2000,6 +2000,7 @@ function initDesktop(){
   $('#winbar').hidden=false;
   $('#winSettings').hidden=false;
 
+  if(W.onLog) W.onLog(function(m){ log('WIN', m); });
   W.onState(function(s){ applyWinState(s); });
   if(W.state) W.state().then(applyWinState).catch(function(){});
   W.setAlwaysOnTop(!!cfg.winOnTop);

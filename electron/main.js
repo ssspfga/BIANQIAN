@@ -21,7 +21,8 @@ let animTimer = null;
 let animating = false;
 let outsideSince = 0;
 let expandArmed = false;   // 收起后必须先把鼠标移开，再靠近才弹出
-let dockedAt = 0;          // 收起时刻，用于防抖
+let dockedAt = 0;
+function wlog(msg) { try { if (win && !win.isDestroyed()) win.webContents.send('win-log', msg); } catch (e) {} }
 
 function winOut() {
   return {
@@ -69,6 +70,7 @@ function collapseToEdge(side) {
   wstate.docked = true;
   expandArmed = false;
   dockedAt = Date.now();
+  wlog('收起（' + side + '）');
   wasOnTop = win.isAlwaysOnTop();
   try {
     win.setMinimumSize(120, 60);
@@ -86,8 +88,9 @@ function collapseToEdge(side) {
   animateTo(b, target, 160);
 }
 
-function expandFromEdge() {
+function expandFromEdge(reason) {
   if (!win || win.isDestroyed() || !wstate.docked) return;
+  wlog('展开（' + (reason || '未知') + '）');
   const b = win.getBounds();
   const wa = screen.getDisplayMatching(b).workArea;
   const base = expandedBounds || {};
@@ -127,7 +130,7 @@ setInterval(() => {
     if (!expandArmed) {
       if (!overStrip) expandArmed = true;
     } else if (overStrip) {
-      expandFromEdge();
+      expandFromEdge('鼠标移到细条');
     }
     return;
   }
@@ -174,7 +177,7 @@ function createWindow() {
 
   // 从任务栏点回来时，如果正处于收起状态就滑出
   win.on('focus', () => {
-    if (wstate.docked && !animating && Date.now() - dockedAt > 500) expandFromEdge();
+    wlog('得到焦点' + (wstate.docked ? '（已收起，不自动展开）' : ''));
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -208,7 +211,7 @@ ipcMain.handle('win-set-always-on-top', (_e, v) => {
 
 ipcMain.handle('win-set-dock', (_e, v) => {
   wstate.dockEnabled = !!v;
-  if (!wstate.dockEnabled && wstate.docked) expandFromEdge();
+  if (!wstate.dockEnabled && wstate.docked) expandFromEdge('关闭贴边功能');
   outsideSince = 0;
   emit();
   return winOut();
@@ -222,7 +225,7 @@ ipcMain.handle('win-close', () => {
   if (win && !win.isDestroyed()) win.close();
 });
 
-ipcMain.on('win-expand', () => { if (wstate.docked && !animating && Date.now() - dockedAt > 300) expandFromEdge(); });
+ipcMain.on('win-expand', () => { if (wstate.docked && !animating && Date.now() - dockedAt > 300) expandFromEdge('点击细条'); });
 
 ipcMain.handle('win-collapse', () => {
   if (!win || win.isDestroyed()) return winOut();
